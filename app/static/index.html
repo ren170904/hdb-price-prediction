@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SG HDB Valuation — price check &amp; deal finder</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0e1a; --card: rgba(26, 35, 53, .55); --card2: rgba(33, 45, 66, .8);
+    --border: rgba(120, 150, 200, .18); --border-hi: rgba(120, 160, 255, .45);
+    --text: #eef2fa; --muted: #93a3bd;
+    --a1: #5b8cff; --a2: #8b5cf6; --a3: #22d3ee;
+    --green: #34d399; --red: #fb7185;
+    --grad: linear-gradient(120deg, var(--a1), var(--a2) 50%, var(--a3));
+    --orb-opacity: .35; --grid-line: rgba(130, 160, 220, .05);
+    --shadow: 0 18px 50px rgba(0, 0, 0, .35); --map-bg: #0d1322;
+  }
+  html.light {
+    --bg: #eef2f9; --card: rgba(255, 255, 255, .62); --card2: rgba(255, 255, 255, .88);
+    --border: rgba(60, 90, 160, .18); --border-hi: rgba(80, 120, 255, .5);
+    --text: #16203a; --muted: #5a6a88;
+    --a3: #0891b2; --green: #059669; --red: #e11d48;
+    --orb-opacity: .22; --grid-line: rgba(60, 90, 150, .08);
+    --shadow: 0 18px 50px rgba(50, 80, 160, .14); --map-bg: #dfe7f2;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden;
+    font-family: "Inter", -apple-system, "Segoe UI", sans-serif;
+    transition: background-color .5s, color .5s;
+  }
+
+  /* ── Animated backdrop: drifting gradient orbs + grid ─────────────── */
+  .orbs { position: fixed; inset: 0; z-index: -2; overflow: hidden; }
+  .orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: var(--orb-opacity); will-change: transform; transition: opacity .5s; }
+  .orb1 { width: 520px; height: 520px; background: #2c4fd8; top: -160px; left: -120px; animation: drift1 26s ease-in-out infinite; }
+  .orb2 { width: 460px; height: 460px; background: #6d28d9; bottom: -180px; right: -100px; animation: drift2 32s ease-in-out infinite; }
+  .orb3 { width: 340px; height: 340px; background: #0e7490; top: 35%; left: 55%; animation: drift3 38s ease-in-out infinite; }
+  @keyframes drift1 { 50% { transform: translate(120px, 90px) scale(1.15); } }
+  @keyframes drift2 { 50% { transform: translate(-140px, -70px) scale(.9); } }
+  @keyframes drift3 { 33% { transform: translate(-90px, 60px); } 66% { transform: translate(70px, -80px) scale(1.2); } }
+  .grid-overlay {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background-image: linear-gradient(var(--grid-line) 1px, transparent 1px),
+                      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 40%, transparent 100%);
+  }
+
+  /* ── Header ────────────────────────────────────────────────────────── */
+  header { padding: 40px 24px 14px; max-width: 1100px; margin: 0 auto; text-align: center; }
+  header h1 {
+    font-family: "Space Grotesk", sans-serif; font-size: clamp(28px, 4.5vw, 40px); font-weight: 700;
+    background: var(--grad); background-size: 220% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shine 7s linear infinite;
+  }
+  @keyframes shine { to { background-position: 220% center; } }
+  header p { color: var(--muted); margin: 8px auto 0; font-size: 15px; max-width: 640px; line-height: 1.55; }
+  .badges { margin-top: 16px; display: flex; gap: 9px; flex-wrap: wrap; justify-content: center; }
+  .badge {
+    background: var(--card2); border: 1px solid var(--border); color: var(--muted);
+    font-size: 12px; padding: 5px 12px; border-radius: 99px; backdrop-filter: blur(8px);
+    transition: transform .25s, border-color .25s;
+  }
+  .badge:hover { transform: translateY(-2px); border-color: var(--border-hi); }
+  .badge b { color: var(--text); }
+
+  /* ── Tabs (sliding pill) ───────────────────────────────────────────── */
+  /* ── "How it works" steps ──────────────────────────────────────────── */
+  .steps {
+    max-width: 1100px; margin: 22px auto 0; padding: 0 24px;
+    display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; text-align: center;
+  }
+  .step {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 20px; width: 250px; backdrop-filter: blur(10px);
+    transition: transform .25s, border-color .25s;
+  }
+  .step:hover { transform: translateY(-3px); border-color: var(--border-hi); }
+  .step .ico { font-size: 24px; }
+  .step h3 { font-size: 14px; margin: 8px 0 5px; font-weight: 700; }
+  .step p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  nav {
+    max-width: 1100px; margin: 18px auto 0; padding: 0 24px;
+    display: flex; gap: 4px; position: relative; justify-content: center;
+  }
+  nav .pill-track {
+    display: inline-flex; gap: 4px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 5px; backdrop-filter: blur(10px);
+  }
+  nav button {
+    background: none; border: none; color: var(--muted); font-family: inherit;
+    font-size: 15px; font-weight: 600; padding: 10px 22px; cursor: pointer;
+    border-radius: 10px; transition: color .3s, background .3s, transform .15s;
+  }
+  nav button:active { transform: scale(.96); }
+  nav button.active { color: #fff; background: linear-gradient(120deg, var(--a1), var(--a2)); box-shadow: 0 4px 18px rgba(91,140,255,.35); }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 22px 24px 70px; }
+
+  /* ── Glass cards + entrance animation ─────────────────────────────── */
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 26px;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow);
+    transition: border-color .35s, background-color .5s, box-shadow .5s;
+  }
+  .card:hover { border-color: var(--border-hi); }
+  .reveal { animation: rise .65s cubic-bezier(.2,.7,.2,1) backwards; }
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+  header.reveal { animation-delay: .05s; }
+  nav.reveal { animation-delay: .15s; }
+
+  .panel { animation: panelIn .45s cubic-bezier(.2,.7,.2,1) backwards; animation-delay: .25s; }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(14px) scale(.99); } }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  label {
+    display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .07em;
+  }
+  select, input {
+    width: 100%; background: var(--card2); border: 1px solid var(--border); color: var(--text);
+    padding: 11px 13px; border-radius: 10px; font-size: 14px; font-family: inherit;
+    transition: border-color .25s, box-shadow .25s, transform .25s;
+  }
+  select:hover, input:hover { border-color: var(--border-hi); }
+  select:focus, input:focus {
+    outline: none; border-color: var(--a1);
+    box-shadow: 0 0 0 4px rgba(91, 140, 255, .18); transform: translateY(-1px);
+  }
+
+  /* ── Buttons: gradient + shine sweep ───────────────────────────────── */
+  .btn {
+    position: relative; overflow: hidden;
+    background: linear-gradient(120deg, var(--a1), var(--a2)); color: #fff; border: none;
+    padding: 13px 32px; border-radius: 12px; font-size: 15px; font-weight: 700; font-family: inherit;
+    cursor: pointer; margin-top: 20px;
+    box-shadow: 0 8px 26px rgba(91, 140, 255, .35);
+    transition: transform .2s, box-shadow .25s, filter .2s;
+  }
+  .btn::after {
+    content: ""; position: absolute; top: 0; left: -80%; width: 50%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent);
+    transform: skewX(-20deg); transition: left .6s;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(139, 92, 246, .45); }
+  .btn:hover::after { left: 130%; }
+  .btn:active { transform: translateY(0) scale(.98); }
+  .btn:disabled { opacity: .55; cursor: wait; transform: none; }
+  #panel-predict > .btn { display: block; margin: 22px auto 0; }
+
+  /* ── Result ────────────────────────────────────────────────────────── */
+  #result { margin-top: 24px; display: none; text-align: center; }
+  #result.show { display: block; animation: pop .55s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes pop { from { opacity: 0; transform: translateY(16px) scale(.96); } }
+  .price {
+    font-family: "Space Grotesk", sans-serif; font-size: clamp(38px, 6vw, 54px); font-weight: 700;
+    background: linear-gradient(120deg, var(--green), var(--a3));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -.01em;
+  }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 5px; }
+  .stats { display: flex; gap: 14px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
+  .stat {
+    background: var(--card2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 18px; min-width: 150px; text-align: center;
+    animation: rise .5s cubic-bezier(.2,.7,.2,1) backwards;
+    transition: transform .25s, border-color .25s;
+  }
+  .stat:hover { transform: translateY(-3px) !important; border-color: var(--border-hi); }
+  .stat:nth-child(1) { animation-delay: .10s; } .stat:nth-child(2) { animation-delay: .18s; }
+  .stat:nth-child(3) { animation-delay: .26s; } .stat:nth-child(4) { animation-delay: .34s; }
+  .stat .v { font-size: 19px; font-weight: 800; }
+  .stat .k { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* ── Loader ────────────────────────────────────────────────────────── */
+  .spinner { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); margin-top: 18px; font-size: 13px; }
+  .spinner .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--a1); animation: bounce .9s ease-in-out infinite; }
+  .spinner .dot:nth-child(2) { animation-delay: .15s; background: var(--a2); }
+  .spinner .dot:nth-child(3) { animation-delay: .3s; background: var(--a3); }
+  @keyframes bounce { 40% { transform: translateY(-7px); } }
+
+  /* ── Deal finder ───────────────────────────────────────────────────── */
+  .row { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; margin-bottom: 16px; }
+  .row > div { min-width: 170px; }
+  .row .btn { margin-top: 0; padding: 11px 26px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 16px; }
+  th { text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px; border-bottom: 1px solid var(--border); }
+  tbody tr, table tr { transition: background .2s; }
+  tr.fade { animation: rowIn .4s ease backwards; }
+  @keyframes rowIn { from { opacity: 0; transform: translateX(-8px); } }
+  tr:hover td { background: rgba(91, 140, 255, .07); }
+  .gap-under { color: var(--green); font-weight: 700; }
+  .gap-over { color: var(--red); font-weight: 700; }
+  #map {
+    height: 440px; border-radius: 14px; margin-top: 18px; border: 1px solid var(--border);
+    box-shadow: 0 12px 36px rgba(0,0,0,.4);
+  }
+  .leaflet-container { background: var(--map-bg); }
+
+  /* ── Theme toggle ──────────────────────────────────────────────────── */
+  #themeBtn {
+    position: fixed; top: 18px; right: 18px; z-index: 1000;
+    width: 46px; height: 46px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--card2); border: 1px solid var(--border);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    font-size: 20px; cursor: pointer;
+    transition: transform .25s, border-color .25s, box-shadow .25s, background-color .5s;
+  }
+  #themeBtn:hover { transform: rotate(18deg) scale(1.1); border-color: var(--border-hi); box-shadow: 0 6px 22px rgba(91, 140, 255, .3); }
+  #themeBtn:active { transform: scale(.92); }
+  #themeBtn.spin { animation: spinIn .5s cubic-bezier(.2,.7,.3,1.2); }
+  @keyframes spinIn { from { transform: rotate(-180deg) scale(.5); } }
+  .hidden { display: none !important; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 16px; line-height: 1.6; text-align: center; }
+  #dealSummary { text-align: center; }
+
+  /* ── Flat model picker card ────────────────────────────────────────── */
+  #modelHint { grid-column: 1 / -1; }
+  .model-card {
+    display: flex; gap: 16px; align-items: center;
+    background: var(--card2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; font-size: 12.5px; color: var(--muted); line-height: 1.55;
+    animation: hintIn .35s ease backwards;
+  }
+  .model-card b { color: var(--text); font-size: 13.5px; }
+  .model-icon { flex: 0 0 auto; width: 58px; height: 58px; color: var(--a1); }
+  .model-icon svg { width: 100%; height: 100%; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+  .chip {
+    background: var(--card); border: 1px solid var(--border); border-radius: 99px;
+    padding: 3px 10px; font-size: 11px; color: var(--muted); white-space: nowrap;
+  }
+  .chip b { color: var(--text); font-size: 11px; }
+  @keyframes hintIn { from { opacity: 0; transform: translateY(4px); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<script>
+  // Apply saved/OS theme before first paint to avoid a flash of the wrong theme.
+  document.documentElement.classList.toggle("light",
+    (localStorage.getItem("hdb-theme") ||
+     (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")) === "light");
+</script>
+<button id="themeBtn" onclick="toggleTheme()" title="Switch light / dark theme" aria-label="Switch theme">☀️</button>
+<div class="orbs"><div class="orb orb1"></div><div class="orb orb2"></div><div class="orb orb3"></div></div>
+<div class="grid-overlay"></div>
+
+<header class="reveal">
+  <h1>🏠 Singapore HDB Valuation</h1>
+  <p>Machine-learning fair-value estimates for HDB resale flats — LightGBM trained on official data.gov.sg transactions.</p>
+  <div class="badges" id="badges"></div>
+</header>
+
+<div class="steps reveal">
+  <div class="step"><div class="ico">📝</div><h3>1 · Describe a flat</h3>
+    <p>Pick the town, address, flat type and size — or just browse recent deals.</p></div>
+  <div class="step"><div class="ico">🤖</div><h3>2 · The model values it</h3>
+    <p>A tuned LightGBM model compares it against 232k+ official transactions, plus distances to MRT, bus stops and the CBD.</p></div>
+  <div class="step"><div class="ico">💡</div><h3>3 · Act on the gap</h3>
+    <p>Get a fair-value estimate (typical error ≈ 3.5%), or spot flats that sold well above or below their fair value.</p></div>
+</div>
+
+<nav class="reveal">
+  <div class="pill-track">
+    <button id="tab-predict" class="active" onclick="showTab('predict')">💰 Price Check</button>
+    <button id="tab-deals" onclick="showTab('deals')">🔎 Deal Finder</button>
+  </div>
+</nav>
+
+<main>
+  <!-- ── Price Check ─────────────────────────────────────────── -->
+  <section id="panel-predict" class="card panel">
+    <div class="grid">
+      <div><label>Town</label>
+        <input id="town" list="townList" placeholder="Type to search… e.g. TAMPINES" autocomplete="off" />
+        <datalist id="townList"></datalist></div>
+      <div><label>Address (for MRT / CBD distance)</label>
+        <input id="address" list="addrList" placeholder="Type block or street…" autocomplete="off" />
+        <datalist id="addrList"></datalist></div>
+      <div><label>Flat type</label><select id="flat_type"></select></div>
+      <div><label>Flat model</label><select id="flat_model"></select></div>
+      <div><label>Storey</label><select id="storey_range"></select></div>
+      <div><label>Floor area (sqm)</label><input id="floor_area" type="number" value="93" min="20" max="300" /></div>
+      <div><label>Lease commence year</label><input id="lease_year" type="number" value="1995" min="1960" max="2030" /></div>
+      <div><label>Valuation year</label><input id="pred_year" type="number" min="2017" max="2035" /></div>
+      <div id="modelHint"></div>
+    </div>
+    <button class="btn" id="predictBtn" onclick="predict()">Estimate value</button>
+    <div class="spinner hidden" id="predictSpin">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      Crunching 232k transactions…
+    </div>
+
+    <div id="result">
+      <div class="price" id="predPrice"></div>
+      <div class="sub" id="predSub"></div>
+      <div class="stats" id="predStats"></div>
+    </div>
+    <p class="note">Estimates come from a tuned LightGBM model (test MAPE ≈ 3.5%). Selecting a real address
+    lets the model use exact distances to the nearest MRT station, bus stop and the CBD.</p>
+  </section>
+
+  <!-- ── Deal Finder ─────────────────────────────────────────── -->
+  <section id="panel-deals" class="card panel hidden">
+    <div class="row">
+      <div><label>Show</label>
+        <select id="dealKind">
+          <option value="under">🟢 Underpriced (bargains)</option>
+          <option value="over">🔴 Overpriced</option>
+        </select></div>
+      <div><label>Town (optional)</label><select id="dealTown"><option value="">All towns</option></select></div>
+      <div><label>Flat type (optional)</label><select id="dealType"><option value="">All types</option></select></div>
+      <div><label>Gap threshold (±%)</label><input id="dealThresh" type="number" value="10" min="5" max="30" /></div>
+      <div><button class="btn" onclick="loadDeals()">Search</button></div>
+    </div>
+    <div class="sub" id="dealSummary"></div>
+    <div id="map"></div>
+    <div style="overflow-x:auto"><table id="dealTable"></table></div>
+    <p class="note">⚠️ Transactions from the last 12 months, scored out-of-sample by a model trained only on older data.
+    A large gap can mean a genuine mispricing — or renovation, view, or urgency the data can't see.</p>
+  </section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => "S$" + Math.round(n).toLocaleString();
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let META = null, map = null, markers = [], tiles = null;
+
+/* ── Theme switching ─────────────────────────────────────────────── */
+const tileUrl = () => `https://{s}.basemaps.cartocdn.com/${
+  document.documentElement.classList.contains("light") ? "light_all" : "dark_all"}/{z}/{x}/{y}{r}.png`;
+
+function applyTheme(t, animate = false) {
+  document.documentElement.classList.toggle("light", t === "light");
+  localStorage.setItem("hdb-theme", t);
+  const btn = $("themeBtn");
+  btn.textContent = t === "light" ? "🌙" : "☀️";
+  if (animate && !REDUCED) { btn.classList.remove("spin"); void btn.offsetWidth; btn.classList.add("spin"); }
+  if (tiles) tiles.setUrl(tileUrl());
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.classList.contains("light") ? "dark" : "light", true);
+}
+
+function fill(sel, items, selected) {
+  sel.innerHTML = items.map(v => `<option ${v === selected ? "selected" : ""}>${v}</option>`).join("");
+}
+
+/* What each HDB flat model means (shown under the Flat model select) */
+const FLAT_MODEL_INFO = {
+  "Standard": "The original 1960s–70s HDB design — basic layouts, usually the smallest units.",
+  "Improved": "1970s–80s upgrade of the Standard layout; very common in older estates.",
+  "New Generation": "Late-1970s–80s blocks with bigger rooms; common in mature towns like Ang Mo Kio and Bedok.",
+  "Simplified": "Late-1980s budget design with compact, efficient 3/4-room layouts.",
+  "Model A": "Mainstream 1980s–90s design with practical layouts — the most common resale model.",
+  "Model A2": "1990s compact variant of Model A with slightly smaller rooms.",
+  "Model A-Maisonette": "Two-storey maisonette version of Model A — rare.",
+  "Apartment": "Larger executive-class flats from the 1980s–90s with generous floor plans.",
+  "Premium Apartment": "1990s+ flats sold with upgraded finishes (flooring, doors) — move-in-ready spec.",
+  "Premium Apartment Loft": "Very rare double-height loft units with a mezzanine level.",
+  "Maisonette": "Two-storey flat with an internal staircase — discontinued and highly sought-after.",
+  "Premium Maisonette": "Premium-spec two-storey maisonette — very rare.",
+  "Improved-Maisonette": "Rare two-storey variant of the Improved design.",
+  "Multi Generation": "Late-1980s extra-large flats with a separate annex/entrance for extended families.",
+  "3Gen": "Newest multi-generation design (2013+) — 4 bedrooms and 3 bathrooms for extended families.",
+  "DBSS": "Design, Build & Sell Scheme — condo-style public housing built by private developers (2006–2011).",
+  "Type S1": "4-room units at the iconic 50-storey Pinnacle@Duxton in the city centre.",
+  "Type S2": "5-room units at Pinnacle@Duxton — among the priciest resale flats in Singapore.",
+  "Adjoined flat": "Two adjacent units merged into one extra-large flat — rare and spacious.",
+  "Terrace": "Extremely rare landed-style HDB terrace houses (Whampoa, Stirling Road).",
+  "2-room": "Compact 2-room layout, often in blocks aimed at smaller or elderly households.",
+};
+
+/* Simple line-art illustrations per building type (theme-aware via currentColor) */
+const MODEL_ICONS = {
+  block: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <rect x="10" y="9" width="28" height="32" rx="1.5"/><path d="M6 41h36"/>
+    <path d="M16 15h4M16 21h4M16 27h4M16 33h4M28 15h4M28 21h4M28 27h4M28 33h4" stroke-width="2.4"/></svg>`,
+  tower: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <rect x="17" y="4" width="14" height="37" rx="1.5"/><path d="M10 41h28"/>
+    <path d="M21 9h6M21 14h6M21 19h6M21 24h6M21 29h6M21 34h6" stroke-width="2.2"/></svg>`,
+  maisonette: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <rect x="9" y="12" width="30" height="29" rx="1.5"/><path d="M9 26.5h30"/><path d="M6 41h36"/>
+    <path d="M15 18h5M28 18h5M28 34h5"/><path d="M15 37v-4h4v-4h4"/></svg>`,
+  terrace: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M4 41h40"/><path d="M6 41V23l9-8 9 8v18"/><path d="M24 23l9-8 9 8v18"/>
+    <path d="M12 30h5M29 30h5"/></svg>`,
+  family: `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <rect x="5" y="14" width="38" height="27" rx="1.5"/><path d="M3 41h42"/><path d="M5 27.5h38"/>
+    <path d="M11 20h5M22 20h5M33 20h5M11 33h5M22 33h5M33 33h5"/></svg>`,
+};
+const MODEL_KIND = {
+  "DBSS": "tower", "Type S1": "tower", "Type S2": "tower", "Premium Apartment Loft": "tower",
+  "Maisonette": "maisonette", "Premium Maisonette": "maisonette",
+  "Improved-Maisonette": "maisonette", "Model A-Maisonette": "maisonette",
+  "Terrace": "terrace",
+  "Multi Generation": "family", "3Gen": "family", "Adjoined flat": "family",
+};
+
+function updateModelHint() {
+  const m = $("flat_model").value;
+  const s = (META && META.flat_model_stats && META.flat_model_stats[m]) || {};
+  $("modelHint").innerHTML = `
+    <div class="model-card">
+      <div class="model-icon">${MODEL_ICONS[MODEL_KIND[m] || "block"]}</div>
+      <div>
+        <b>${m}</b> — ${FLAT_MODEL_INFO[m] || "One of the less common HDB construction models."}
+        <div class="chips">
+          ${s.era ? `<span class="chip">🏗️ built <b>${s.era}</b></span>` : ""}
+          ${s.median_area ? `<span class="chip">📐 typically <b>~${s.median_area} sqm</b></span>` : ""}
+          ${s.median_price ? `<span class="chip">💵 median <b>S$${Math.round(s.median_price / 1000)}k</b></span>` : ""}
+          ${s.share != null ? `<span class="chip">📊 <b>${s.share}%</b> of resales</span>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* Animated count-up for the price reveal */
+function countUp(el, target, dur = 900) {
+  if (REDUCED) { el.textContent = fmt(target); return; }
+  const t0 = performance.now();
+  (function tick(t) {
+    const p = Math.min((t - t0) / dur, 1);
+    const eased = 1 - Math.pow(1 - p, 3);          // ease-out cubic
+    el.textContent = fmt(target * eased);
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+  // rAF doesn't fire in backgrounded tabs — guarantee the final value lands
+  setTimeout(() => { el.textContent = fmt(target); }, dur + 80);
+}
+
+async function init() {
+  META = await (await fetch("/api/meta")).json();
+  const m = META.model_metrics || {};
+  $("badges").innerHTML = [
+    `<span class="badge"><b>${META.n_transactions.toLocaleString()}</b> transactions</span>`,
+    `<span class="badge">data through <b>${META.data_through}</b></span>`,
+    m.RMSE ? `<span class="badge">test RMSE <b>${fmt(m.RMSE)}</b></span>` : "",
+    m["R²"] ? `<span class="badge">R² <b>${m["R²"]}</b></span>` : "",
+  ].join("");
+
+  $("townList").innerHTML = META.towns.map(t => `<option value="${t}">`).join("");
+  $("town").value = "TAMPINES";
+  fill($("flat_type"), META.flat_types, "4 ROOM");
+  fill($("flat_model"), META.flat_models, "Model A");
+  fill($("storey_range"), META.storey_ranges, "07 TO 09");
+  $("pred_year").value = parseInt(META.data_through.slice(0, 4));
+  $("dealTown").innerHTML += META.towns.map(t => `<option>${t}</option>`).join("");
+  $("dealType").innerHTML += META.flat_types.map(t => `<option>${t}</option>`).join("");
+  await loadAddresses();
+  $("town").addEventListener("change", () => {
+    $("town").value = $("town").value.trim().toUpperCase();
+    if (META.towns.includes($("town").value)) loadAddresses();
+  });
+  $("address").addEventListener("change", () => {
+    $("address").value = $("address").value.trim().toUpperCase();
+  });
+  $("flat_model").addEventListener("change", updateModelHint);
+  updateModelHint();
+}
+
+async function loadAddresses() {
+  const addrs = await (await fetch(`/api/addresses?town=${encodeURIComponent($("town").value)}`)).json();
+  $("addrList").innerHTML = addrs.map(a => `<option value="${a}">`).join("");
+  $("address").value = addrs[0] || "";
+}
+
+async function predict() {
+  const town = $("town").value.trim().toUpperCase();
+  if (!META.towns.includes(town)) {
+    alert(`Unknown town "${town}" — pick one from the suggestions.`);
+    return;
+  }
+  $("predictBtn").disabled = true;
+  $("predictSpin").classList.remove("hidden");
+  $("result").classList.remove("show");
+  try {
+    const body = {
+      town: town, flat_type: $("flat_type").value,
+      flat_model: $("flat_model").value, storey_range: $("storey_range").value,
+      floor_area_sqm: +$("floor_area").value, lease_commence_year: +$("lease_year").value,
+      year: +$("pred_year").value, month: 6,
+      address: $("address").value.trim().toUpperCase() || null,
+    };
+    const r = await fetch("/api/predict", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const d = await r.json();
+    $("predSub").textContent = `Estimated market value — ${body.flat_type} · ${body.town} · ${body.floor_area_sqm} sqm · ${body.year}`;
+    let stats = "";
+    if (d.location) stats += `
+      <div class="stat"><div class="v">${d.location.dist_nearest_mrt_m.toLocaleString()} m</div><div class="k">to ${d.location.nearest_mrt_name || "nearest"} MRT station</div></div>
+      <div class="stat"><div class="v">${d.location.dist_nearest_bus_m.toLocaleString()} m</div><div class="k">to "${d.location.nearest_bus_name || "nearest"}" bus stop</div></div>
+      <div class="stat"><div class="v">${d.location.dist_cbd_km} km</div><div class="k">to CBD (Raffles Place)</div></div>`;
+    if (d.comparables.median) stats += `
+      <div class="stat"><div class="v">${fmt(d.comparables.median)}</div><div class="k">median of ${d.comparables.n.toLocaleString()} comparable sales</div></div>`;
+    $("predStats").innerHTML = stats;
+    $("result").classList.add("show");
+    $("result").style.display = "block";
+    countUp($("predPrice"), d.predicted_price);
+    $("result").scrollIntoView({ behavior: REDUCED ? "auto" : "smooth", block: "nearest" });
+  } catch (e) {
+    alert("Prediction failed: " + e.message);
+  } finally {
+    $("predictBtn").disabled = false;
+    $("predictSpin").classList.add("hidden");
+  }
+}
+
+function showTab(name) {
+  for (const t of ["predict", "deals"]) {
+    $("tab-" + t).classList.toggle("active", t === name);
+    const panel = $("panel-" + t);
+    const show = t === name;
+    panel.classList.toggle("hidden", !show);
+    if (show) {           // retrigger entrance animation
+      panel.classList.remove("panel"); void panel.offsetWidth; panel.classList.add("panel");
+    }
+  }
+  if (name === "deals" && !map) {
+    map = L.map("map").setView([1.355, 103.82], 11);
+    tiles = L.tileLayer(tileUrl(),
+      { attribution: "© OpenStreetMap © CARTO", subdomains: "abcd", maxZoom: 19 }).addTo(map);
+    loadDeals();
+  }
+  if (name === "deals" && map) setTimeout(() => map.invalidateSize(), 80);
+}
+
+async function loadDeals() {
+  const q = new URLSearchParams({
+    kind: $("dealKind").value, threshold: $("dealThresh").value, limit: 100,
+  });
+  if ($("dealTown").value) q.set("town", $("dealTown").value);
+  if ($("dealType").value) q.set("flat_type", $("dealType").value);
+  const r = await fetch("/api/deals?" + q);
+  if (!r.ok) { alert((await r.json()).detail); return; }
+  const d = await r.json();
+  const under = $("dealKind").value === "under";
+
+  $("dealSummary").textContent =
+    `${d.deals.length} ${under ? "underpriced" : "overpriced"} transactions shown (of ${d.total_scored.toLocaleString()} scored in the last 12 months)`;
+
+  markers.forEach(m => m.remove());
+  markers = d.deals.filter(x => x.lat).map((x, i) => {
+    const mk = L.circleMarker([x.lat, x.lon], {
+      radius: 0, weight: 1.5, color: "#fff", fillOpacity: .85,
+      fillColor: x.gap_pct < 0 ? "#34d399" : "#fb7185",
+    }).bindPopup(
+      `<b>${x.address}</b><br>${x.flat_type} · ${x.storey_range} · ${x.floor_area_sqm} sqm<br>` +
+      `Sold ${x.month}: <b>${fmt(x.actual)}</b><br>Fair value: ${fmt(x.predicted)}<br>` +
+      `Gap: <b>${x.gap_pct > 0 ? "+" : ""}${x.gap_pct.toFixed(1)}%</b>`
+    ).addTo(map);
+    // staggered marker grow-in
+    setTimeout(() => mk.setRadius(7), REDUCED ? 0 : Math.min(i * 14, 1200));
+    return mk;
+  });
+
+  $("dealTable").innerHTML =
+    `<tr><th>Month</th><th>Address</th><th>Town</th><th>Type</th><th>Storey</th><th>Sqm</th>
+     <th>Sold for</th><th>Fair value</th><th>Gap</th></tr>` +
+    d.deals.map((x, i) => `<tr class="fade" style="animation-delay:${Math.min(i * 25, 600)}ms">
+      <td>${x.month}</td><td>${x.address}</td><td>${x.town}</td><td>${x.flat_type}</td>
+      <td>${x.storey_range}</td><td>${x.floor_area_sqm}</td>
+      <td>${fmt(x.actual)}</td><td>${fmt(x.predicted)}</td>
+      <td class="${x.gap_pct < 0 ? "gap-under" : "gap-over"}">${x.gap_pct > 0 ? "+" : ""}${x.gap_pct.toFixed(1)}%</td>
+    </tr>`).join("");
+}
+
+applyTheme(document.documentElement.classList.contains("light") ? "light" : "dark");
+init();
+</script>
+</body>
+</html>

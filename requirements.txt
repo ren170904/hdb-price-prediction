@@ -1,0 +1,22 @@
+ipython
+jupyterlab
+matplotlib
+seaborn
+mkdocs
+notebook
+numpy
+pandas
+pip
+python-dotenv
+requests
+ruff
+scikit-learn
+lightgbm
+optuna
+streamlit
+plotly
+joblib
+pyarrow
+fastapi
+uvicorn
+-e .

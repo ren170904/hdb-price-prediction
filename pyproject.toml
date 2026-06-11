@@ -1,0 +1,32 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "sg_hdb_price_analysis"
+version = "0.0.1"
+description = ": Price prediction analysis"
+authors = [
+  { name = "Rentaro Yamamoto" },
+]
+
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    
+]
+requires-python = ">=3.10"
+
+
+[tool.ruff]
+line-length = 99
+src = ["sg_hdb_price_analysis"]
+include = ["pyproject.toml", "sg_hdb_price_analysis/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["sg_hdb_price_analysis"]
+force-sort-within-sections = true
+

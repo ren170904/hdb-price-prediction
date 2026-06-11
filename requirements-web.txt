@@ -1,0 +1,9 @@
+# Slim dependency set for deploying the FastAPI web app only
+# (full dev environment: requirements.txt)
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+lightgbm
+joblib
