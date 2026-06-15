@@ -1,5 +1,7 @@
 # 🏠 Singapore HDB Resale Price Analysis & Prediction
 
+**By Rentaro Yamamoto** · [GitHub](https://github.com/ren170904/hdb-price-prediction)
+
 End-to-end machine learning project: **232k+ public-housing resale transactions** (2017–present) analysed
 with pandas, priced with a **tuned LightGBM model**, and served through an **interactive web app + Streamlit
 dashboard** that estimate any flat's market value and flag **overpriced / underpriced** transactions.
@@ -128,3 +130,10 @@ make dashboard   # 5. launch the app
     ├── features/               <- engineering.py, spatial.py (BallTree)
     └── models/                 <- train.py, experiment.py
 ```
+
+## 👤 Author
+
+**Rentaro Yamamoto** — [GitHub](https://github.com/ren170904)
+
+Built as a portfolio project covering the full ML lifecycle: data engineering, exploratory analysis,
+model building & tuning, and deployment of an interactive web app.

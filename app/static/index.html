@@ -102,7 +102,15 @@
   nav button:active { transform: scale(.96); }
   nav button.active { color: #fff; background: linear-gradient(120deg, var(--a1), var(--a2)); box-shadow: 0 4px 18px rgba(91,140,255,.35); }
 
-  main { max-width: 1100px; margin: 0 auto; padding: 22px 24px 70px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 22px 24px 40px; }
+
+  footer {
+    text-align: center; color: var(--muted); font-size: 13px;
+    padding: 8px 24px 50px; line-height: 1.6;
+  }
+  footer b { color: var(--text); }
+  footer a { color: var(--a1); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
 
   /* ── Glass cards + entrance animation ─────────────────────────────── */
   .card {
@@ -334,6 +342,11 @@
     A large gap can mean a genuine mispricing — or renovation, view, or urgency the data can't see.</p>
   </section>
 </main>
+
+<footer>
+  Built by <b>Rentaro Yamamoto</b> · LightGBM · FastAPI ·
+  <a href="https://github.com/ren170904/hdb-price-prediction" target="_blank" rel="noopener">View on GitHub</a>
+</footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
