@@ -22,6 +22,8 @@ def fetch_dataset(dataset_id: str, label: str, limit: int = 10000) -> pd.DataFra
     records = []
     offset = 0
 
+    # The Datastore API caps each response, so page through with limit/offset
+    # until a short batch signals the last page.
     while True:
         resp = requests.get(
             url,
@@ -37,10 +39,10 @@ def fetch_dataset(dataset_id: str, label: str, limit: int = 10000) -> pd.DataFra
         records.extend(batch)
         print(f"  [{label}] offset={offset:>7,} | rows so far: {len(records):>7,}")
 
-        if len(batch) < limit:
+        if len(batch) < limit:  # fewer rows than requested → last page
             break
         offset += limit
-        time.sleep(0.3)
+        time.sleep(0.3)  # be polite to the public API
 
     return pd.DataFrame(records)
 

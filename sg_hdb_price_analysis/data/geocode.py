@@ -54,6 +54,11 @@ def geocode_one(address: str, retries: int = 4) -> tuple[float | None, float | N
 
 
 def get_unique_addresses() -> pd.DataFrame:
+    """Distinct (block, street_name) addresses across all transactions.
+
+    232k transactions map to only ~9.7k unique blocks, so geocoding the unique
+    set instead of every row cuts ~96% of the API calls.
+    """
     df = pd.read_csv(RAW_DIR / "hdb_resale_prices_all.csv", usecols=["block", "street_name"])
     df["address"] = df["block"].astype(str).str.strip() + " " + df["street_name"].astype(str).str.strip()
     uniq = df[["block", "street_name", "address"]].drop_duplicates("address").reset_index(drop=True)
@@ -61,7 +66,12 @@ def get_unique_addresses() -> pd.DataFrame:
 
 
 def geocode_all(max_workers: int = 2, force: bool = False) -> pd.DataFrame:
-    """Geocode all unique HDB addresses, caching incrementally."""
+    """Geocode all unique HDB addresses, caching incrementally.
+
+    max_workers defaults to 2 on purpose: OneMap aggressively throttles under
+    concurrency (8 workers dropped success to ~6%), so we trade speed for a
+    96% hit rate. Progress is saved every 200 addresses, making the job resumable.
+    """
     EXTERNAL_DIR.mkdir(parents=True, exist_ok=True)
     uniq = get_unique_addresses()
 

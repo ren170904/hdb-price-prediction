@@ -11,7 +11,11 @@ EARTH_RADIUS_M = 6_371_000.0
 
 
 def _load_points(filename: str) -> np.ndarray:
-    """Load lat/lon points (radians) for BallTree haversine queries."""
+    """Load lat/lon points as radians for BallTree haversine queries.
+
+    sklearn's haversine metric expects coordinates in radians, so we convert up
+    front and keep all reference points in radian space.
+    """
     df = pd.read_csv(EXTERNAL_DIR / filename)
     coords = df[["lat", "lon"]].dropna().to_numpy()
     return np.radians(coords)
@@ -20,13 +24,21 @@ def _load_points(filename: str) -> np.ndarray:
 def _nearest_distance_and_count(
     query_coords: np.ndarray, ref_coords_rad: np.ndarray, radius_m: float
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return (nearest distance in metres, count within radius) for each query point."""
-    tree = BallTree(ref_coords_rad, metric="haversine")
-    q_rad = np.radians(query_coords)
+    """Return (nearest distance in metres, count within radius) for each query point.
 
+    A BallTree with the haversine metric answers nearest-neighbour and
+    radius queries in O(log n) — fast enough to score all 232k transactions
+    against ~6k bus stops in seconds.
+    """
+    tree = BallTree(ref_coords_rad, metric="haversine")
+    q_rad = np.radians(query_coords)  # queries must also be in radians
+
+    # k=1 nearest neighbour. Haversine returns angular distance (radians);
+    # multiply by Earth's radius to get metres.
     dist_rad, _ = tree.query(q_rad, k=1)
     nearest_m = dist_rad[:, 0] * EARTH_RADIUS_M
 
+    # Count reference points within radius_m (converted to radians the same way).
     radius_rad = radius_m / EARTH_RADIUS_M
     counts = tree.query_radius(q_rad, r=radius_rad, count_only=True)
 
