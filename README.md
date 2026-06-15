@@ -1,8 +1,21 @@
 # 🏠 Singapore HDB Resale Price Analysis & Prediction
 
 End-to-end machine learning project: **232k+ public-housing resale transactions** (2017–present) analysed
-with pandas, priced with a **tuned LightGBM model**, and served through an **interactive Streamlit
-dashboard** that estimates any flat's market value and flags **overpriced / underpriced** transactions.
+with pandas, priced with a **tuned LightGBM model**, and served through an **interactive web app + Streamlit
+dashboard** that estimate any flat's market value and flag **overpriced / underpriced** transactions.
+
+![HDB Valuation web app](docs/screenshots/hero.png)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/valuation.png" alt="Fair-value estimate with nearest MRT, bus stop and CBD distances"></td>
+    <td width="50%"><img src="docs/screenshots/deal-finder.png" alt="Deal finder map of under/over-priced transactions"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>💰 Price Check</b> — instant fair-value estimate with the nearest named MRT station, bus stop &amp; CBD distance</td>
+    <td align="center"><b>🔎 Deal Finder</b> — recent transactions mapped by how far they sold above/below model fair value</td>
+  </tr>
+</table>
 
 | | |
 |---|---|

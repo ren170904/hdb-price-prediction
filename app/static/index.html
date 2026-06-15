@@ -339,7 +339,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => "S$" + Math.round(n).toLocaleString();
-const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  || new URLSearchParams(location.search).has("still");   // ?still=1 → no animations (screenshots/a11y)
 let META = null, map = null, markers = [], tiles = null;
 
 /* ── Theme switching ─────────────────────────────────────────────── */
@@ -585,7 +586,11 @@ async function loadDeals() {
 }
 
 applyTheme(document.documentElement.classList.contains("light") ? "light" : "dark");
-init();
+init().then(() => {
+  // Deep-linking: #deals opens the deal finder, #demo runs a sample valuation.
+  if (location.hash === "#deals") showTab("deals");
+  else if (location.hash === "#demo") predict();
+});
 </script>
 </body>
 </html>
